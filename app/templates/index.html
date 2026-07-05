@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tourisme en Train</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:        #12120f;
+  --paper:      #f5f3ee;
+  --rail:       #1a3a2a;
+  --rail-light: #2d6648;
+  --accent:     #e8a020;
+  --muted:      #8a8880;
+  --panel:      #ffffff;
+  --border:     #e0ddd6;
+  --shadow:     0 4px 24px rgba(0,0,0,0.13);
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+header {
+  background: var(--rail);
+  padding: 0 24px;
+  display: flex; align-items: center; gap: 24px;
+  height: 56px; flex-shrink: 0;
+  border-bottom: 3px solid var(--accent);
+}
+header h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px; font-weight: 700;
+  color: #fff; letter-spacing: 0.02em; white-space: nowrap;
+}
+header h1 span { color: var(--accent); }
+
+.search-bar { display: flex; align-items: center; gap: 8px; flex: 1; }
+.search-bar input {
+  height: 34px; border: none; border-radius: 6px;
+  padding: 0 10px; font-size: 13px; font-family: 'Inter', sans-serif;
+  background: rgba(255,255,255,0.12); color: #fff; outline: none;
+  transition: background 0.15s;
+}
+.search-bar input::placeholder { color: rgba(255,255,255,0.45); }
+.search-bar input:focus { background: rgba(255,255,255,0.2); }
+.search-bar input[type="date"],
+.search-bar input[type="time"] { color: #fff; color-scheme: dark; }
+input.dep, input.arr { width: 150px; }
+input[type="date"] { width: 132px; }
+input[type="time"] { width: 90px; }
+input.radius      { width: 80px; }
+.search-bar label { font-size: 10px; color: rgba(255,255,255,0.5); white-space: nowrap; }
+.field { display: flex; flex-direction: column; gap: 2px; }
+
+/* Mode toggle */
+.mode-toggle {
+  display: flex; background: rgba(255,255,255,0.1);
+  border-radius: 6px; padding: 2px; flex-shrink: 0;
+}
+.mode-toggle button {
+  height: 28px; padding: 0 9px; border: none; border-radius: 4px;
+  font-size: 11px; font-family: 'Syne', sans-serif; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+  background: transparent; color: rgba(255,255,255,0.55); white-space: nowrap;
+}
+.mode-toggle button.active { background: var(--accent); color: var(--ink); }
+
+.resolved-banner {
+  display: none; font-size: 10px; color: rgba(255,255,255,0.65);
+  white-space: nowrap; align-self: flex-end; padding-bottom: 2px;
+}
+
+.btn-search {
+  height: 34px; padding: 0 18px;
+  background: var(--accent); color: var(--ink);
+  font-family: 'Syne', sans-serif; font-weight: 600; font-size: 13px;
+  border: none; border-radius: 6px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  transition: opacity 0.15s; white-space: nowrap; flex-shrink: 0;
+}
+.btn-search:hover { opacity: 0.88; }
+.btn-search:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Body ── */
+.body { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+/* ── Left trip panel ── */
+.trip-panel {
+  width: 280px; flex-shrink: 0;
+  background: var(--panel); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+  z-index: 10;
+}
+.panel-header {
+  padding: 12px 16px 10px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: baseline; gap: 8px;
+}
+.panel-header h2 {
+  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--rail);
+}
+.count-badge { font-size: 11px; color: var(--muted); }
+.trip-list { overflow-y: auto; flex: 1; }
+
+.trip-item {
+  padding: 11px 16px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.1s;
+}
+.trip-item:hover   { background: #f9f8f5; }
+.trip-item.active  { background: #eef5f1; border-left: 3px solid var(--rail-light); }
+
+.trip-date {
+  font-size: 10px; font-weight: 500; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px;
+}
+.trip-times {
+  font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 600;
+}
+.trip-times .sep { color: var(--muted); font-weight: 400; margin: 0 4px; }
+.trip-line { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.trip-number { font-size: 11px; font-weight: 500; color: var(--rail-light); }
+.trip-summary {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; margin-top: 6px;
+}
+.mode-pill {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  padding: 2px 7px; border-radius: 999px;
+  background: #eef1ee; color: var(--rail);
+  max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.trip-co2 {
+  font-size: 11px; font-weight: 700; color: var(--rail-light);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+.empty-state {
+  padding: 32px 16px; text-align: center;
+  color: var(--muted); font-size: 13px; line-height: 1.6;
+}
+
+/* ── Map area ── */
+.map-area { position: relative; flex: 1; overflow: hidden; }
+#map { position: absolute; inset: 0; z-index: 0; }
+
+.status-bar {
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+  background: white; border-radius: 8px; padding: 7px 16px;
+  font-size: 12px; color: var(--muted);
+  box-shadow: var(--shadow); z-index: 10; pointer-events: none;
+  white-space: nowrap; display: none;
+}
+
+/* ── Carbon overlay ── */
+.co2-overlay {
+  position: absolute;
+  bottom: -220px;               /* hidden below the fold */
+  left: 50%; transform: translateX(-50%);
+  width: 520px; max-width: calc(100% - 32px);
+  background: var(--panel);
+  border-radius: 14px;
+  box-shadow: var(--shadow), 0 0 0 1px var(--border);
+  z-index: 500;
+  padding: 18px 22px 16px;
+  transition: bottom 0.38s cubic-bezier(.3,.8,.3,1);
+}
+.co2-overlay.open { bottom: 24px; }
+
+.co2-overlay-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.co2-title {
+  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+  color: var(--rail); line-height: 1.3;
+}
+.co2-subtitle { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.co2-close {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 18px; line-height: 1;
+  padding: 0 2px; transition: color 0.15s;
+}
+.co2-close:hover { color: var(--ink); }
+
+.co2-lead {
+  font-size: 12px; color: var(--ink); margin-bottom: 12px;
+  padding: 7px 10px; background: #f0f7f3; border-radius: 7px;
+}
+.co2-lead b { color: var(--rail-light); }
+
+.co2-source {
+  margin-top: 10px; font-size: 10px; color: var(--muted); text-align: right;
+}
+
+/* ── Right detail panel ── */
+.detail-panel {
+  width: 0; flex-shrink: 0; overflow: hidden;
+  background: var(--panel); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  transition: width 0.3s cubic-bezier(.3,.8,.3,1);
+  z-index: 10;
+}
+.detail-panel.open { width: 300px; }
+
+.detail-header {
+  padding: 14px 16px 10px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.detail-header h2 {
+  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--rail);
+}
+.detail-close {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 18px; padding: 0;
+  transition: color 0.15s;
+}
+.detail-close:hover { color: var(--ink); }
+.detail-body { padding: 16px; overflow-y: auto; flex: 1; }
+
+.detail-type-badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  padding: 3px 10px; border-radius: 999px; margin-bottom: 12px;
+  background: #eef1ee; color: var(--rail); text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.detail-name {
+  font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 700;
+  color: var(--ink); margin-bottom: 6px; line-height: 1.3;
+}
+.detail-meta {
+  font-size: 12px; color: var(--muted); line-height: 1.7;
+}
+.detail-meta span { display: block; }
+.detail-meta b { color: var(--ink); font-weight: 500; }
+.detail-divider {
+  border: none; border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+/* ── Autocomplete ── */
+.autocomplete-wrapper { position: relative; }
+.autocomplete-list {
+  position: absolute; top: calc(100% + 4px); left: 0;
+  background: white; border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 9999; min-width: 200px; max-height: 200px; overflow-y: auto; display: none;
+}
+.autocomplete-list.open { display: block; }
+.autocomplete-item { padding: 8px 12px; font-size: 13px; cursor: pointer; color: var(--ink); }
+.autocomplete-item:hover { background: #f5f3ee; }
+
+/* ── Spinner ── */
+.spinner {
+  display: none; width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.3); border-top-color: white;
+  border-radius: 50%; animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Leaflet popup ── */
+.leaflet-popup-content { font-size: 13px; line-height: 1.5; }
+.popup-title { font-family: 'Syne', sans-serif; font-weight: 600; font-size: 14px; }
+.popup-meta  { color: var(--muted); font-size: 12px; margin-top: 2px; }
+/* ── Top tabs ── */
+.top-tabs { display: flex; gap: 4px; flex-shrink: 0; }
+.top-tabs button {
+  height: 34px; padding: 0 16px; border: none; border-radius: 6px;
+  font-family: 'Syne', sans-serif; font-weight: 600; font-size: 13px;
+  cursor: pointer; transition: all 0.15s;
+  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6);
+}
+.top-tabs button.active { background: #fff; color: var(--rail); }
+
+.view { display: none; flex: 1; overflow: hidden; }
+.view.active { display: flex; }
+#view-itineraires.active { flex-direction: row; }
+#view-stats.active { flex-direction: column; }
+
+/* ── Stats dashboard ── */
+.stats-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.stats-subtabs {
+  display: flex; gap: 6px; padding: 14px 24px 0; flex-shrink: 0;
+  border-bottom: 1px solid var(--border); background: var(--panel);
+}
+.stats-subtabs button {
+  height: 38px; padding: 0 18px; border: none; cursor: pointer;
+  font-family: 'Syne', sans-serif; font-weight: 600; font-size: 13px;
+  background: transparent; color: var(--muted);
+  border-bottom: 3px solid transparent; transition: all 0.15s;
+}
+.stats-subtabs button.active { color: var(--rail); border-bottom-color: var(--accent); }
+
+.stats-scroll { flex: 1; overflow-y: auto; padding: 20px 24px 40px; }
+.stats-panel { display: none; }
+.stats-panel.active { display: block; }
+
+.stats-loading, .stats-error {
+  padding: 48px; text-align: center; color: var(--muted); font-size: 14px;
+}
+.stats-error { color: var(--poi); }
+
+.chart-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 18px; margin-bottom: 18px;
+}
+.chart-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px;
+}
+.chart-card.full { grid-column: 1 / -1; }
+.chart-card h3 {
+  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+  color: var(--rail); margin-bottom: 12px;
+}
+.chart-div { width: 100%; }
+
+.metric-row { display: flex; gap: 18px; margin-bottom: 18px; flex-wrap: wrap; }
+.metric-card {
+  flex: 1; min-width: 160px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 20px;
+  border-left: 4px solid var(--rail-light);
+}
+.metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 6px; }
+.metric-value { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 700;
+  color: var(--rail); }
+.metric-card.carbon { border-left-color: var(--accent); }
+
+</style>
+</head>
+<body>
+
+<!-- ══ Header ══ -->
+<header>
+  <h1>Tourisme <span>en train</span></h1>
+  <div class="top-tabs">
+    <button id="tab-btn-itin" class="active" onclick="switchView('itineraires')">Itinéraires</button>
+    <button id="tab-btn-stats" onclick="switchView('stats')">Statistiques</button>
+  </div>
+  <div class="search-bar" id="search-bar">
+    <div class="field autocomplete-wrapper">
+      <label>Départ</label>
+      <input class="dep" id="inp-dep" placeholder="Ex: Nantes" autocomplete="off">
+      <div class="autocomplete-list" id="ac-dep"></div>
+    </div>
+    <div class="field" style="gap:4px">
+      <label>Destination</label>
+      <div class="mode-toggle">
+        <button id="btn-mode-station" class="active" onclick="setMode('station')">Gare</button>
+        <button id="btn-mode-poi" onclick="setMode('poi')">Lieu</button>
+      </div>
+    </div>
+    <div class="field autocomplete-wrapper">
+      <label id="lbl-arr">Gare d'arrivée</label>
+      <input class="arr" id="inp-arr" placeholder="Ex: Angers" autocomplete="off">
+      <div class="autocomplete-list" id="ac-arr"></div>
+    </div>
+    <span class="resolved-banner" id="resolved-banner"></span>
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="inp-date">
+    </div>
+    <div class="field">
+      <label>Heure min.</label>
+      <input type="time" id="inp-time" value="00:00">
+    </div>
+    <div class="field">
+      <label>Périmètre (m)</label>
+      <input class="radius" id="inp-radius" type="number" value="1000" min="100" max="50000" step="100">
+    </div>
+    <button class="btn-search" id="btn-search">
+      <span id="btn-label">Rechercher</span>
+      <div class="spinner" id="spinner"></div>
+    </button>
+  </div>
+</header>
+
+<!-- ══ Body ══ -->
+<!-- ══ View: Itinéraires ══ -->
+<div class="view active" id="view-itineraires">
+<div class="body">
+
+  <!-- Left: trip list -->
+  <div class="trip-panel">
+    <div class="panel-header">
+      <h2>Trajets</h2>
+      <span class="count-badge" id="trip-count"></span>
+    </div>
+    <div class="trip-list" id="trip-list">
+      <div class="empty-state">Lancez une recherche<br>pour voir les trajets disponibles.</div>
+    </div>
+  </div>
+
+  <!-- Center: map + overlays -->
+  <div class="map-area" id="map-area">
+    <div id="map"></div>
+    <div class="status-bar" id="status-bar"></div>
+
+    <!-- Carbon comparison overlay -->
+    <div class="co2-overlay" id="co2-overlay">
+      <div class="co2-overlay-header">
+        <div>
+          <div class="co2-title" id="co2-title">Empreinte carbone</div>
+          <div class="co2-subtitle" id="co2-subtitle"></div>
+        </div>
+        <button class="co2-close" onclick="closeCo2Overlay()">✕</button>
+      </div>
+      <div class="co2-lead" id="co2-lead" style="display:none"></div>
+      <div class="bar-grid" id="bar-grid"></div>
+      <div class="co2-source">Source : ADEME Base Carbone 2024</div>
+    </div>
+  </div>
+
+  <!-- Right: detail panel -->
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-header">
+      <h2 id="detail-panel-title">Détails</h2>
+      <button class="detail-close" onclick="closeDetailPanel()">✕</button>
+    </div>
+    <div class="detail-body" id="detail-body"></div>
+  </div>
+
+</div>
+</div><!-- /view-itineraires -->
+
+<!-- ══ View: Statistiques ══ -->
+<div class="view" id="view-stats">
+  <div class="stats-wrap">
+    <div class="stats-subtabs">
+      <button class="active" data-sub="touristique"   onclick="switchSub('touristique')">🏛️ Touristique</button>
+      <button data-sub="frequentation" onclick="switchSub('frequentation')">🚆 Fréquentation</button>
+      <button data-sub="accessibilite" onclick="switchSub('accessibilite')">♿ Accessibilité</button>
+      <button data-sub="carbone"       onclick="switchSub('carbone')">🌱 Carbone</button>
+    </div>
+    <div class="stats-scroll">
+      <div class="stats-loading" id="stats-loading">Chargement des statistiques…</div>
+
+      <div class="stats-panel active" id="sub-touristique">
+        <div class="chart-grid">
+          <div class="chart-card"><h3>KPI 3 — Top 15 gares par diversité touristique</h3><div class="chart-div" id="c-diversite"></div></div>
+          <div class="chart-card"><h3>KPI 1 — Top 15 gares par nombre de POI</h3><div class="chart-div" id="c-poi"></div></div>
+        </div>
+        <div class="chart-card full"><h3>KPI 4 — Répartition des POI par famille touristique</h3><div class="chart-div" id="c-familles"></div></div>
+      </div>
+
+      <div class="stats-panel" id="sub-frequentation">
+        <div class="chart-grid">
+          <div class="chart-card"><h3>KPI 5 — Top 15 gares par fréquentation annuelle</h3><div class="chart-div" id="c-freq"></div></div>
+          <div class="chart-card"><h3>KPI 6 — Fréquentation par région</h3><div class="chart-div" id="c-freqreg"></div></div>
+        </div>
+        <div class="chart-card full"><h3>KPI 16 — Taux de régularité TER par région</h3><div class="chart-div" id="c-regularite"></div></div>
+      </div>
+
+      <div class="stats-panel" id="sub-accessibilite">
+        <div class="metric-row" id="m-access"></div>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>KPI 10 — Top 15 gares par places vélo</h3><div class="chart-div" id="c-velo"></div></div>
+          <div class="chart-card"><h3>KPI 11 — Top 15 gares les plus accessibles</h3><div class="chart-div" id="c-access"></div></div>
+        </div>
+      </div>
+
+      <div class="stats-panel" id="sub-carbone">
+        <div class="metric-row" id="m-carbone"></div>
+        <div class="chart-card full"><h3>KPI 15 — Top 15 trajets par CO₂ évité (vs voiture)</h3><div class="chart-div" id="c-co2"></div></div>
+        <div class="chart-card full"><h3>KPI 8 — Distribution du score global d'attractivité</h3><div class="chart-div" id="c-score"></div></div>
+      </div>
+
+      <div style="font-size:11px;color:var(--muted);margin-top:20px;line-height:1.5">
+        Méthodologie carbone : facteurs ADEME. Le score d'attractivité dépend de la complétude
+        de DATAtourisme, inégale selon les territoires.
+      </div>
+    </div>
+  </div>
+</div><!-- /view-stats -->
+
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  View switching (Itinéraires / Statistiques)
+// ═══════════════════════════════════════════════════════════════
+let statsLoaded = false;
+
+function switchView(view) {
+  const isItin = view === 'itineraires';
+  document.getElementById('view-itineraires').classList.toggle('active', isItin);
+  document.getElementById('view-stats').classList.toggle('active', !isItin);
+  document.getElementById('tab-btn-itin').classList.toggle('active', isItin);
+  document.getElementById('tab-btn-stats').classList.toggle('active', !isItin);
+  document.getElementById('search-bar').style.display = isItin ? 'flex' : 'none';
+  if (isItin) {
+    setTimeout(() => map.invalidateSize(), 50);
+  } else if (!statsLoaded) {
+    loadStats();
+  }
+}
+
+function switchSub(sub) {
+  document.querySelectorAll('.stats-subtabs button')
+    .forEach(b => b.classList.toggle('active', b.dataset.sub === sub));
+  document.querySelectorAll('.stats-panel')
+    .forEach(p => p.classList.toggle('active', p.id === 'sub-' + sub));
+  // Plotly needs a resize when a hidden chart becomes visible
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 30);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Stats dashboard
+// ═══════════════════════════════════════════════════════════════
+const STATS_COLORS = {
+  vert: '#2e9e6b', vert_fonce: '#1b5e3f', vert_clair: '#7fd1a8',
+  ambre: '#e8a33d', bleu: '#3a7ca5', poi: '#c0392b'
+};
+const FAMILLE_COLORS = {
+  "Patrimoine religieux":"#8e6c8a","Chateaux & monuments":"#b5651d",
+  "Musees & culture":"#3a7ca5","Nature & paysage":"#2e9e6b",
+  "Plages & littoral":"#48b8d0","Parcs & jardins":"#7cb342",
+  "Loisirs & sport":"#e8a33d","Randonnee & velo":"#558b2f",
+  "Patrimoine technique":"#78909c","Memoire & histoire":"#a1887f",
+  "Vignobles & terroir":"#9c27b0","Evenements & spectacles":"#ec407a",
+  "Services touristiques":"#90a4ae","Hebergement & restauration":"#ff7043",
+  "Autre":"#cfd8dc"
+};
+
+const PLOT_FONT = { family: 'Inter, sans-serif', size: 11, color: '#12120f' };
+const PLOT_CONFIG = { displayModeBar: false, responsive: true };
+function baseLayout(extra) {
+  return Object.assign({
+    font: PLOT_FONT,
+    margin: { l: 4, r: 8, t: 6, b: 28 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    height: 360
+  }, extra || {});
+}
+
+// Horizontal bar (top-N). data sorted desc; Plotly draws bottom-up so reverse.
+function hbar(divId, rows, xKey, yKey, color, xTitle) {
+  const r = rows.slice().reverse();
+  Plotly.newPlot(divId, [{
+    type: 'bar', orientation: 'h',
+    x: r.map(d => d[xKey]),
+    y: r.map(d => d[yKey]),
+    marker: { color: color },
+    hovertemplate: '%{y}<br>%{x}<extra></extra>'
+  }], baseLayout({
+    margin: { l: 150, r: 12, t: 6, b: 30 },
+    xaxis: { title: { text: xTitle || '', font: { size: 10 } }, gridcolor: '#eee' },
+    yaxis: { automargin: true, tickfont: { size: 10 } }
+  }), PLOT_CONFIG);
+}
+
+function fmt(n) {
+  return Number(n).toLocaleString('fr-FR');
+}
+function metricCard(label, value, carbon) {
+  return `<div class="metric-card${carbon ? ' carbon' : ''}">
+    <div class="metric-label">${label}</div>
+    <div class="metric-value">${value}</div></div>`;
+}
+
+async function loadStats() {
+  const loading = document.getElementById('stats-loading');
+  loading.style.display = 'block';
+  loading.className = 'stats-loading';
+  try {
+    const d = await fetch('/api/stats/dashboard').then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    renderStats(d);
+    statsLoaded = true;
+    loading.style.display = 'none';
+  } catch (e) {
+    loading.className = 'stats-error';
+    loading.textContent = 'Erreur de chargement des statistiques : ' + e.message;
+    console.error(e);
+  }
+}
+
+function renderStats(d) {
+  // ── Touristique ──
+  hbar('c-diversite', d.touristique.top_diversite, 'nb_familles', 'nom_gare', STATS_COLORS.vert, 'Familles');
+  hbar('c-poi',       d.touristique.top_poi,       'nb_poi',      'nom_gare', STATS_COLORS.ambre, 'POI');
+  const fam = d.touristique.poi_familles;
+  Plotly.newPlot('c-familles', [{
+    type: 'bar',
+    x: fam.map(f => f.famille),
+    y: fam.map(f => f.nb_poi),
+    marker: { color: fam.map(f => FAMILLE_COLORS[f.famille] || STATS_COLORS.vert) },
+    hovertemplate: '%{x}<br>%{y} POI<extra></extra>'
+  }], baseLayout({
+    margin: { l: 40, r: 8, t: 6, b: 110 },
+    xaxis: { tickangle: -40, tickfont: { size: 10 } },
+    yaxis: { title: { text: 'Nombre de POI', font: { size: 10 } }, gridcolor: '#eee' }
+  }), PLOT_CONFIG);
+
+  // ── Fréquentation ──
+  hbar('c-freq', d.frequentation.top_freq, 'voyageurs', 'nom_gare', STATS_COLORS.bleu, 'Voyageurs/an');
+  const fr = d.frequentation.freq_region;
+  Plotly.newPlot('c-freqreg', [{
+    type: 'pie',
+    labels: fr.map(x => x.region),
+    values: fr.map(x => x.voyageurs),
+    marker: { colors: ['#1b5e3f','#2e9e6b','#7fd1a8','#e8a33d','#3a7ca5','#48b8d0','#b5651d','#9c27b0','#78909c','#ec407a','#7cb342','#a1887f','#ff7043'] },
+    textinfo: 'label+percent', textposition: 'inside', textfont: { size: 9 }
+  }], baseLayout({ margin: { l: 4, r: 4, t: 6, b: 6 }, showlegend: false }), PLOT_CONFIG);
+  const reg = d.frequentation.regularite_region;
+  Plotly.newPlot('c-regularite', [{
+    type: 'bar',
+    x: reg.map(x => x.region),
+    y: reg.map(x => x.taux),
+    marker: { color: reg.map(x => x.taux), colorscale: 'Greens' },
+    hovertemplate: '%{x}<br>%{y:.1f}%<extra></extra>'
+  }], baseLayout({
+    margin: { l: 40, r: 8, t: 6, b: 100 },
+    xaxis: { tickangle: -40, tickfont: { size: 10 } },
+    yaxis: { title: { text: 'Régularité (%)', font: { size: 10 } }, range: [80, 100], gridcolor: '#eee' }
+  }), PLOT_CONFIG);
+
+  // ── Accessibilité ──
+  const am = d.accessibilite.metrics;
+  document.getElementById('m-access').innerHTML =
+    metricCard("KPI 9 — Gares avec offre PMR", fmt(am.nb_pmr))
+    + metricCard("Gares avec stationnement vélo", fmt(am.nb_velo))
+    + metricCard("Total places vélo (national)", fmt(am.total_velo));
+  hbar('c-velo',   d.accessibilite.top_velo,   'places_velo',         'nom_gare', STATS_COLORS.vert_fonce, 'Places vélo');
+  hbar('c-access', d.accessibilite.top_access, 'score_accessibilite', 'nom_gare', STATS_COLORS.vert, 'Score');
+
+  // ── Carbone ──
+  const cm = d.carbone.metrics, sm = d.carbone.score_metrics;
+  const pct = sm.total ? (100 * sm.nb_above / sm.total).toFixed(1) : '0';
+  document.getElementById('m-carbone').innerHTML =
+    metricCard("Trajets analysés", fmt(cm.nb_trajets), true)
+    + metricCard("CO₂ évité moyen vs voiture", (cm.co2_moyen || 0).toFixed(0) + ' kg', true)
+    + metricCard("Équivalent arbres moyen", (cm.arbres_moyen || 0).toFixed(1) + ' 🌳', true)
+    + metricCard("Gares score > 70/100", sm.nb_above + ' (' + pct + '%)', true);
+  hbar('c-co2', d.carbone.top_co2, 'co2_evite_voiture_kg', 'trajet', STATS_COLORS.vert, 'CO₂ évité (kg)');
+  Plotly.newPlot('c-score', [{
+    type: 'histogram',
+    x: d.carbone.score_values, nbinsx: 20,
+    marker: { color: STATS_COLORS.vert }
+  }], baseLayout({
+    margin: { l: 44, r: 8, t: 6, b: 34 }, height: 280,
+    xaxis: { title: { text: 'Score global', font: { size: 10 } } },
+    yaxis: { title: { text: 'Nb de gares', font: { size: 10 } }, gridcolor: '#eee' }
+  }), PLOT_CONFIG);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Map (itinerary view)
+// ═══════════════════════════════════════════════════════════════
+const map = L.map('map').setView([46.8, 2.3], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+let tripLayer    = null;
+let poiLayer     = null;
+let stationLayer = null;
+let lastResults  = null;
+let searchMode   = 'station';
+
+const stationIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:14px;height:14px;background:#1a3a2a;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.3)"></div>',
+  iconSize: [14,14], iconAnchor: [7,7]
+});
+const poiIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:10px;height:10px;background:#c0392b;border:2px solid white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.25)"></div>',
+  iconSize: [10,10], iconAnchor: [5,5]
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  Mode toggle
+// ═══════════════════════════════════════════════════════════════
+function setMode(mode) {
+  searchMode = mode;
+  document.getElementById('btn-mode-station').classList.toggle('active', mode === 'station');
+  document.getElementById('btn-mode-poi').classList.toggle('active', mode === 'poi');
+  document.getElementById('lbl-arr').textContent    = mode === 'station' ? "Gare d'arrivée" : "Lieu / POI";
+  document.getElementById('inp-arr').placeholder    = mode === 'station' ? 'Ex: Angers' : 'Ex: Château de…';
+  document.getElementById('inp-arr').value          = '';
+  document.getElementById('resolved-banner').style.display = 'none';
+  document.getElementById('ac-arr').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Autocomplete
+// ═══════════════════════════════════════════════════════════════
+function setupAutocomplete(inputId, listId, getUrl) {
+  const inp = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  let debounce;
+  inp.addEventListener('input', () => {
+    clearTimeout(debounce);
+    const q = inp.value.trim();
+    if (q.length < 2) { list.classList.remove('open'); return; }
+    debounce = setTimeout(async () => {
+      const url = getUrl(q);
+      if (!url) return;
+      const data = await fetch(url).then(r => r.json());
+      list.innerHTML = '';
+      data.forEach(name => {
+        const el = document.createElement('div');
+        el.className = 'autocomplete-item';
+        el.textContent = name;
+        el.addEventListener('click', () => { inp.value = name; list.classList.remove('open'); });
+        list.appendChild(el);
+      });
+      list.classList.toggle('open', data.length > 0);
+    }, 250);
+  });
+  document.addEventListener('click', e => {
+    if (!inp.contains(e.target) && !list.contains(e.target))
+      list.classList.remove('open');
+  });
+}
+
+setupAutocomplete('inp-dep', 'ac-dep', q => '/api/stations?q=' + encodeURIComponent(q));
+setupAutocomplete('inp-arr', 'ac-arr', q =>
+  searchMode === 'station'
+    ? '/api/stations?q=' + encodeURIComponent(q)
+    : '/api/pois?q='     + encodeURIComponent(q)
+);
+
+document.getElementById('inp-date').value = new Date().toISOString().split('T')[0];
+
+// ═══════════════════════════════════════════════════════════════
+//  Search
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('btn-search').addEventListener('click', doSearch);
+
+async function doSearch() {
+  const dep    = document.getElementById('inp-dep').value.trim();
+  const arr    = document.getElementById('inp-arr').value.trim();
+  const date   = document.getElementById('inp-date').value;
+  const time   = document.getElementById('inp-time').value;
+  const radius = document.getElementById('inp-radius').value;
+  if (!dep || !arr || !date) { alert('Veuillez remplir Départ, Destination et Date.'); return; }
+
+  setLoading(true);
+  closeCo2Overlay();
+  closeDetailPanel();
+  document.getElementById('resolved-banner').style.display = 'none';
+
+  try {
+    const base = searchMode === 'station'
+      ? `/api/search?departure=${encodeURIComponent(dep)}&arrival=${encodeURIComponent(arr)}`
+      : `/api/search_poi?departure=${encodeURIComponent(dep)}&poi=${encodeURIComponent(arr)}`;
+    const url = base + `&date=${date}&time=${time}&radius=${radius}`;
+    const data = await fetch(url).then(r => r.json());
+
+    if (data.error) { alert('Erreur API : ' + data.error); console.error(data.trace); return; }
+
+    if (searchMode === 'poi' && data.resolved_station) {
+      const b = document.getElementById('resolved-banner');
+      b.textContent = 'Gare : ' + data.resolved_station.name
+        + ' (' + (data.resolved_station.distance_m / 1000).toFixed(1) + ' km)';
+      b.style.display = 'inline';
+    }
+
+    lastResults = data;
+    renderTrips(data.trips);
+    renderMap(data.trips, data.pois, data.arrival_station);
+  } catch(e) {
+    alert('Erreur : ' + e.message); console.error(e);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function setLoading(on) {
+  document.getElementById('btn-search').disabled     = on;
+  document.getElementById('btn-label').style.display = on ? 'none'  : 'inline';
+  document.getElementById('spinner').style.display   = on ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Carbon overlay
+// ═══════════════════════════════════════════════════════════════
+const MODE_SHORT = {
+  tgv: 'TGV', intercites: 'Intercités', ter: 'TER',
+  autocar: 'Autocar', voiture: 'Voiture', avion: 'Avion'
+};
+
+function co2Color(ratio) {
+  // ratio 0 = lowest (green), 1 = highest (red)
+  const hue = (1 - ratio) * 125;
+  return `hsl(${hue.toFixed(0)},62%,42%)`;
+}
+
+function openCo2Overlay(trip) {
+  const ems = trip.emissions || [];
+  if (!ems.length) return;
+
+  const sorted = ems.slice().sort((a, b) => b.grams - a.grams);
+  const max    = sorted[0].grams || 1;
+  const own    = ems.find(e => e.is_trip);
+  const car    = ems.find(e => e.mode === 'voiture');
+
+  document.getElementById('co2-title').textContent =
+    'Empreinte carbone · ' + (trip.distance_km != null ? trip.distance_km + ' km' : '');
+  document.getElementById('co2-subtitle').textContent =
+    trip.departure_time.slice(0,5) + ' → ' + trip.arrival_time.slice(0,5)
+    + ' · ' + (MODE_SHORT[trip.train_mode] || trip.mode_label || '');
+
+  const lead = document.getElementById('co2-lead');
+  if (car && own && own.grams > 0 && car.grams > own.grams) {
+    const ratio = car.grams / own.grams;
+    lead.innerHTML = 'Votre trajet émet <b>'
+      + (ratio >= 10 ? Math.round(ratio) : ratio.toFixed(1))
+      + '× moins</b> de CO₂ que la voiture.';
+    lead.style.display = 'block';
+  } else {
+    lead.style.display = 'none';
+  }
+
+  // SVG chart — no CSS transitions, renders immediately and reliably
+  const BAR_H    = 22;
+  const LABEL_W  = 80;
+  const VAL_W    = 52;
+  const GAP      = 8;
+  const ROW_GAP  = 10;
+  const TRACK_W  = 280;
+  const svgW     = LABEL_W + GAP + TRACK_W + GAP + VAL_W;
+  const svgH     = sorted.length * (BAR_H + ROW_GAP) - ROW_GAP;
+
+  const rows = sorted.map((e, i) => {
+    const barW  = Math.max(4, (e.grams / max) * TRACK_W);
+    const hue   = ((1 - e.grams / max) * 125).toFixed(0);
+    const color = `hsl(${hue},62%,42%)`;
+    const val   = e.kg >= 0.1 ? e.kg.toFixed(1) + ' kg' : e.grams + ' g';
+    const label = MODE_SHORT[e.mode] || e.label;
+    const y     = i * (BAR_H + ROW_GAP);
+    const bold  = e.is_trip ? 'font-weight="700"' : '';
+
+    return `
+      <text x="${LABEL_W}" y="${y + BAR_H - 6}" text-anchor="end"
+            font-size="12" fill="#12120f" ${bold}>${label}</text>
+      <rect x="${LABEL_W + GAP}" y="${y}" width="${TRACK_W}" height="${BAR_H}"
+            rx="5" fill="#f0efec"/>
+      <rect x="${LABEL_W + GAP}" y="${y}" width="${barW.toFixed(1)}" height="${BAR_H}"
+            rx="5" fill="${color}"/>
+      <text x="${LABEL_W + GAP + TRACK_W + GAP}" y="${y + BAR_H - 6}"
+            font-size="12" fill="#12120f" ${bold}>${val}</text>`;
+  }).join('');
+
+  document.getElementById('bar-grid').innerHTML =
+    `<svg width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}"
+          xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">
+       ${rows}
+     </svg>`;
+
+  document.getElementById('co2-overlay').classList.add('open');
+}
+
+function closeCo2Overlay() {
+  document.getElementById('co2-overlay').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Right detail panel
+// ═══════════════════════════════════════════════════════════════
+function openDetailPanel(type, data) {
+  const panel = document.getElementById('detail-panel');
+  const body  = document.getElementById('detail-body');
+  const title = document.getElementById('detail-panel-title');
+
+  if (type === 'station') {
+    title.textContent = 'Gare';
+    body.innerHTML = `
+      <div class="detail-type-badge">Gare SNCF</div>
+      <div class="detail-name">${data.name}</div>
+      <hr class="detail-divider">
+      <div class="detail-meta">
+        <span><b>Latitude</b> ${data.lat.toFixed(5)}</span>
+        <span><b>Longitude</b> ${data.lon.toFixed(5)}</span>
+      </div>`;
+  } else if (type === 'poi') {
+    title.textContent = 'Point d\'intérêt';
+    const typeClean = (data.type || '').replace('schema:', '').replace('CulturalSite', 'Site culturel');
+    body.innerHTML = `
+      <div class="detail-type-badge">${typeClean}</div>
+      <div class="detail-name">${data.nom}</div>
+      <hr class="detail-divider">
+      <div class="detail-meta">
+        <span><b>Commune</b> ${data.commune || '—'}</span>
+        <span><b>Distance gare</b> ${data.distance} m</span>
+      </div>`;
+  }
+
+  panel.classList.add('open');
+  // Trigger map resize so it fills the new narrower space
+  setTimeout(() => map.invalidateSize(), 310);
+}
+
+function closeDetailPanel() {
+  document.getElementById('detail-panel').classList.remove('open');
+  setTimeout(() => map.invalidateSize(), 310);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Render trip list
+// ═══════════════════════════════════════════════════════════════
+function renderTrips(trips) {
+  const list  = document.getElementById('trip-list');
+  const count = document.getElementById('trip-count');
+  if (!trips || !trips.length) {
+    list.innerHTML = '<div class="empty-state">Aucun trajet trouvé<br>pour ces critères.</div>';
+    count.textContent = ''; return;
+  }
+  count.textContent = trips.length + ' trajet' + (trips.length > 1 ? 's' : '');
+  list.innerHTML = '';
+  trips.forEach((t, i) => {
+    const el = document.createElement('div');
+    el.className = 'trip-item';
+    el.id = 'trip-' + i;
+    const co2txt = t.co2_kg != null
+      ? (t.co2_kg >= 0.1 ? t.co2_kg.toFixed(1) + ' kg' : t.co2_grams + ' g') + ' CO₂'
+      : '';
+    el.innerHTML =
+      `<div class="trip-date">${formatDate(t.departure_date)}</div>
+       <div class="trip-times">${t.departure_time.slice(0,5)}<span class="sep">→</span>${t.arrival_time.slice(0,5)}</div>
+       <div class="trip-line"><span class="trip-number">${t.train_number || t.line || '—'}</span>${t.line_name ? ' · ' + t.line_name : ''}</div>
+       <div class="trip-summary">
+         <span class="mode-pill">${MODE_SHORT[t.train_mode] || t.mode_label || '—'}</span>
+         <span class="trip-co2">${co2txt}</span>
+       </div>`;
+    el.addEventListener('click', () => selectTrip(i));
+    list.appendChild(el);
+  });
+}
+
+function formatDate(dateStr) {
+  return new Date(dateStr + 'T00:00:00')
+    .toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Select a trip
+// ═══════════════════════════════════════════════════════════════
+function selectTrip(i) {
+  document.querySelectorAll('.trip-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('trip-' + i);
+  if (el) el.classList.add('active');
+
+  if (!lastResults) return;
+  const trip = lastResults.trips[i];
+
+  // Draw route on map
+  if (tripLayer) map.removeLayer(tripLayer);
+  if (trip.geojson) {
+    tripLayer = L.geoJSON(JSON.parse(trip.geojson), {
+      style: { color: '#1a3a2a', weight: 4, opacity: 0.85 }
+    }).addTo(map);
+    if (tripLayer.getBounds().isValid())
+      map.fitBounds(tripLayer.getBounds(), { padding: [40, 40] });
+  }
+
+  // Status bar
+  const status = document.getElementById('status-bar');
+  status.style.display = 'block';
+  status.textContent = trip.departure_time.slice(0,5) + ' → '
+    + trip.arrival_time.slice(0,5) + ' · ' + (trip.train_number || trip.line || '');
+
+  // Open carbon overlay
+  openCo2Overlay(trip);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Render map
+// ═══════════════════════════════════════════════════════════════
+function renderMap(trips, pois, station) {
+  map.invalidateSize();
+  if (tripLayer)    { map.removeLayer(tripLayer);    tripLayer    = null; }
+  if (poiLayer)     { map.removeLayer(poiLayer);     poiLayer     = null; }
+  if (stationLayer) { map.removeLayer(stationLayer); stationLayer = null; }
+  document.getElementById('status-bar').style.display = 'none';
+
+  const bounds = [];
+
+  if (trips && trips.length && trips[0].geojson) {
+    tripLayer = L.geoJSON(JSON.parse(trips[0].geojson), {
+      style: { color: '#1a3a2a', weight: 4, opacity: 0.85 }
+    }).addTo(map);
+    if (tripLayer.getBounds().isValid()) {
+      const b = tripLayer.getBounds();
+      bounds.push([b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]);
+    }
+  }
+
+  if (station) {
+    stationLayer = L.marker([station.lat, station.lon], { icon: stationIcon })
+      .bindPopup(`<div class="popup-title">🚉 ${station.name}</div>
+                  <div class="popup-meta">Gare d'arrivée</div>`)
+      .on('click', () => openDetailPanel('station', station))
+      .addTo(map);
+    bounds.push([station.lat, station.lon]);
+  }
+
+  if (pois && pois.length) {
+    poiLayer = L.layerGroup();
+    pois.forEach(p => {
+      const [lon, lat] = JSON.parse(p.geojson).coordinates;
+      L.marker([lat, lon], { icon: poiIcon })
+        .bindPopup(`<div class="popup-title">${p.nom}</div>
+                    <div class="popup-meta">${p.type} · ${p.commune}</div>
+                    <div class="popup-meta" style="margin-top:4px">📍 ${p.distance} m</div>`)
+        .on('click', () => openDetailPanel('poi', p))
+        .addTo(poiLayer);
+      bounds.push([lat, lon]);
+    });
+    poiLayer.addTo(map);
+  }
+
+  if (bounds.length) {
+    try { map.fitBounds(bounds, { padding: [40, 40] }); } catch(e) {}
+  }
+
+  if (trips && trips.length) {
+    document.getElementById('trip-0').classList.add('active');
+    selectTrip(0);
+  }
+}
+</script>
+</body>
+</html>
